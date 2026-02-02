@@ -5,21 +5,40 @@ dotenv.config()
 
 const { Pool } = pg
 
-// Configuración del pool de conexiones
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  max: 20, // Máximo de conexiones en el pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-})
+// Configuración que funciona TANTO en desarrollo LOCAL como en RENDER
+const poolConfig = process.env.DATABASE_URL 
+  ? {
+      // PRODUCCIÓN (Render) - Usa DATABASE_URL
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false // Requerido por Render
+      },
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    }
+  : {
+      // DESARROLLO LOCAL - Usa variables individuales
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || 'skillswap',
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    }
 
-// Verificar conexión
+const pool = new Pool(poolConfig)
+
+// Event listeners
 pool.on('connect', () => {
   console.log('✅ Conectado a PostgreSQL')
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🌐 Modo: PRODUCCIÓN')
+  } else {
+    console.log('💻 Modo: DESARROLLO')
+  }
 })
 
 pool.on('error', (err) => {
@@ -27,7 +46,16 @@ pool.on('error', (err) => {
   process.exit(-1)
 })
 
-// Función auxiliar para queries
+// Verificar conexión
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('❌ Error al conectar con la base de datos:', err)
+  } else {
+    console.log('✅ Base de datos conectada:', res.rows[0].now)
+  }
+})
+
+// Funciones auxiliares
 export const query = async (text, params) => {
   const start = Date.now()
   try {
@@ -41,13 +69,11 @@ export const query = async (text, params) => {
   }
 }
 
-// Función para obtener un cliente del pool (transacciones)
 export const getClient = async () => {
   const client = await pool.connect()
   const query = client.query.bind(client)
   const release = client.release.bind(client)
   
-  // Timeout de liberación
   const timeout = setTimeout(() => {
     console.error('⚠️ Cliente no liberado después de 5 segundos')
   }, 5000)
