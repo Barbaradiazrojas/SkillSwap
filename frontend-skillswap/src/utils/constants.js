@@ -1,3 +1,4 @@
+export const URLBASE = import.meta.env.VITE_URL_BACKEND ?? 'https://backend-skillswap-jdba.onrender.com'
 export const CATEGORIES = [
   'Programación',
   'Diseño',
