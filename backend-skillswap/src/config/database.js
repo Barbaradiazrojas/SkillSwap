@@ -5,29 +5,20 @@ dotenv.config()
 
 const { Pool } = pg
 
-// Configuración que funciona TANTO en desarrollo LOCAL como en RENDER
-const poolConfig = process.env.DATABASE_URL 
-  ? {
-      // PRODUCCIÓN (Render) - Usa DATABASE_URL
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false // Requerido por Render
-      },
-      max: 5,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-    }
-  : {
-      // DESARROLLO LOCAL - Usa variables individuales
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || 'skillswap',
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    }
+// Configuración usando variables individuales
+const poolConfig = {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || 5432,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: false
+  } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+}
 
 const pool = new Pool(poolConfig)
 
@@ -87,3 +78,17 @@ export const getClient = async () => {
 }
 
 export default pool
+```
+
+### Paso 2: Variables en Render
+
+Ve a Render → Backend → **Entorno** y configura estas 5 variables:
+```
+DB_HOST      = dpg-d602nsu3jp1c73ck324g-a.oregon-postgres.render.com
+DB_PORT      = 5432
+DB_USER      = bdss_5mfa_user
+DB_PASSWORD  = n5f7mlHFVCZgSdkfwoP6Hq8UEfRsX2AD
+DB_NAME      = bdss_5mfa
+JWT_SECRET   = Barbara
+NODE_ENV     = production
+FRONTEND_URL = https://skill-swap-tau-ochre.vercel.app
