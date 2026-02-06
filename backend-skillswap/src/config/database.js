@@ -78,17 +78,3 @@ export const getClient = async () => {
 }
 
 export default pool
-```
-
-### Paso 2: Variables en Render
-
-Ve a Render → Backend → **Entorno** y configura estas 5 variables:
-```
-DB_HOST      = dpg-d602nsu3jp1c73ck324g-a.oregon-postgres.render.com
-DB_PORT      = 5432
-DB_USER      = bdss_5mfa_user
-DB_PASSWORD  = n5f7mlHFVCZgSdkfwoP6Hq8UEfRsX2AD
-DB_NAME      = bdss_5mfa
-JWT_SECRET   = Barbara
-NODE_ENV     = production
-FRONTEND_URL = https://skill-swap-tau-ochre.vercel.app
