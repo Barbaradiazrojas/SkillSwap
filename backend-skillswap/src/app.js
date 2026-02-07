@@ -8,7 +8,28 @@ const app = express()
 
 // CORS configurado para producción
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // Permitir requests sin origin (como Postman, apps móviles)
+    if (!origin) return callback(null, true)
+    
+    // Lista de orígenes permitidos
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      /\.vercel\.app$/  // Todos los subdominios de vercel.app
+    ]
+    
+    // Verificar si el origin está permitido
+    const isAllowed = allowedOrigins.some(allowed => 
+      allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
+    )
+    
+    if (isAllowed) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true
 }
 
