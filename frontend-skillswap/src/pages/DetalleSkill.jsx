@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react'
 import { Container, Row, Col, Card, Button, Badge, ListGroup, Form, Tab, Tabs } from 'react-bootstrap'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { skillsAPI, favoritesAPI, cartAPI, reviewsAPI } from '../services/api'
+import { skillsAPI, favoritesAPI, cartAPI, reviewsAPI, handleAPIError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import SkillCard from '../components/SkillCard'
 
 function DetalleSkill() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   
   const [skill, setSkill] = useState(null)
   const [reviews, setReviews] = useState([])
@@ -17,6 +17,7 @@ function DetalleSkill() {
   const [loading, setLoading] = useState(true)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isInCart, setIsInCart] = useState(false)
+  const [checkingFavorite, setCheckingFavorite] = useState(false)
   
   // Estado para nueva reseña
   const [showReviewForm, setShowReviewForm] = useState(false)
@@ -30,6 +31,13 @@ function DetalleSkill() {
     window.scrollTo(0, 0)
   }, [id])
 
+  // Verificar si está en favoritos cuando carga el skill
+  useEffect(() => {
+    if (skill && isAuthenticated()) {
+      checkIfFavorite()
+    }
+  }, [skill, user])
+
   const loadSkillDetails = async () => {
     try {
       setLoading(true)
@@ -41,49 +49,75 @@ function DetalleSkill() {
       }
 
       // Cargar reseñas
-      const reviewsResponse = await reviewsAPI.getBySkill(id)
-      if (reviewsResponse.data.success) {
-        setReviews(reviewsResponse.data.data || [])
+      try {
+        const reviewsResponse = await reviewsAPI.getBySkill(id)
+        if (reviewsResponse.data.success) {
+          setReviews(reviewsResponse.data.data || [])
+        }
+      } catch (error) {
+        console.error('Error al cargar reseñas:', error)
+        setReviews([])
       }
 
       // Cargar skills relacionados
-      const relatedResponse = await skillsAPI.getAll({ 
-        categoria: skillResponse.data.data?.categoria,
-        limit: 4 
-      })
-      if (relatedResponse.data.success) {
-        setRelatedSkills(relatedResponse.data.data?.filter(s => s.id_skill !== parseInt(id)) || [])
+      try {
+        const relatedResponse = await skillsAPI.getAll({ 
+          categoria: skillResponse.data.data?.categoria,
+          limit: 4 
+        })
+        if (relatedResponse.data.success) {
+          setRelatedSkills(relatedResponse.data.data?.filter(s => s.id_skill !== parseInt(id)) || [])
+        }
+      } catch (error) {
+        console.error('Error al cargar skills relacionados:', error)
+        setRelatedSkills([])
       }
 
     } catch (error) {
       console.error('Error al cargar skill:', error)
-      // Datos de ejemplo
-      setSkill(getDemoSkill())
-      setReviews(getDemoReviews())
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
+      setSkill(null)
     } finally {
       setLoading(false)
     }
   }
 
+  const checkIfFavorite = async () => {
+    try {
+      setCheckingFavorite(true)
+      const response = await favoritesAPI.checkFavorite(skill.id_skill)
+      if (response.data.success) {
+        setIsFavorite(response.data.data.isFavorite)
+      }
+    } catch (error) {
+      console.error('Error al verificar favorito:', error)
+    } finally {
+      setCheckingFavorite(false)
+    }
+  }
+
   const handleAddToCart = async () => {
-    if (!user) {
+    if (!isAuthenticated()) {
       toast.info('Debes iniciar sesión para agregar al carrito')
       navigate('/login')
       return
     }
 
     try {
-      await cartAPI.addItem(skill.id_skill, 1)
+      // ✅ CORRECTO: Enviar objeto con skillId
+      await cartAPI.addItem({ skillId: skill.id_skill, cantidad: 1 })
       setIsInCart(true)
       toast.success('Agregado al carrito')
     } catch (error) {
       console.error('Error al agregar al carrito:', error)
-      toast.error('Error al agregar al carrito')
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     }
   }
 
   const handleToggleFavorite = async () => {
-    if (!user) {
+    if (!isAuthenticated()) {
       toast.info('Debes iniciar sesión para agregar a favoritos')
       navigate('/login')
       return
@@ -91,24 +125,27 @@ function DetalleSkill() {
 
     try {
       if (isFavorite) {
-        await favoritesAPI.remove(skill.id_skill)
+        // ✅ CORRECTO: removeFavorite
+        await favoritesAPI.removeFavorite(skill.id_skill)
         setIsFavorite(false)
         toast.success('Eliminado de favoritos')
       } else {
-        await favoritesAPI.add(skill.id_skill)
+        // ✅ CORRECTO: addFavorite
+        await favoritesAPI.addFavorite(skill.id_skill)
         setIsFavorite(true)
         toast.success('Agregado a favoritos')
       }
     } catch (error) {
       console.error('Error al manejar favorito:', error)
-      toast.error('Error al actualizar favoritos')
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     }
   }
 
   const handleSubmitReview = async (e) => {
     e.preventDefault()
     
-    if (!user) {
+    if (!isAuthenticated()) {
       toast.info('Debes iniciar sesión para dejar una reseña')
       navigate('/login')
       return
@@ -127,50 +164,10 @@ function DetalleSkill() {
       loadSkillDetails()
     } catch (error) {
       console.error('Error al publicar reseña:', error)
-      toast.error('Error al publicar reseña')
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     }
   }
-
-  const getDemoSkill = () => ({
-    id_skill: 1,
-    titulo: 'Diseño UI/UX Profesional con Figma',
-    descripcion: 'Aprende a crear interfaces de usuario modernas y funcionales utilizando Figma. Este curso te enseñará desde los conceptos básicos hasta técnicas avanzadas de prototipado y diseño de sistemas.',
-    categoria: 'Diseño',
-    nivel: 'Intermedio',
-    modalidad: 'Online',
-    duracion_horas: 12,
-    precio: 45000,
-    rating: 4.8,
-    total_resenas: 2,
-    imagen_url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5',
-    es_activo: true,
-    user: {
-      id_usuario: 1,
-      nombre: 'Sofia',
-      apellido: 'Ruiz',
-      avatar_url: 'https://ui-avatars.com/api/?name=Sofia+Ruiz&background=0d6efd&color=fff',
-      rating: 4.8,
-      total_intercambios: 13
-    },
-    creado_en: '2024-01-15'
-  })
-
-  const getDemoReviews = () => ([
-    {
-      id_resena: 1,
-      puntuacion: 5,
-      comentario: 'Excelente curso, muy completo y bien explicado. Aprendí muchísimo.',
-      usuario: { nombre: 'Juan', apellido: 'Pérez', avatar_url: null },
-      creado_en: '2024-01-20'
-    },
-    {
-      id_resena: 2,
-      puntuacion: 4,
-      comentario: 'Muy bueno, aunque me hubiera gustado más práctica.',
-      usuario: { nombre: 'María', apellido: 'González', avatar_url: null },
-      creado_en: '2024-01-18'
-    }
-  ])
 
   const renderStars = (rating) => {
     return Array.from({ length: 5 }, (_, index) => (
@@ -234,8 +231,13 @@ function DetalleSkill() {
           className="position-absolute top-0 end-0 m-3 rounded-circle shadow"
           style={{ width: '48px', height: '48px' }}
           onClick={handleToggleFavorite}
+          disabled={checkingFavorite}
         >
-          <i className={`bi bi-heart${isFavorite ? '-fill text-danger' : ''} fs-5`}></i>
+          {checkingFavorite ? (
+            <span className="spinner-border spinner-border-sm"></span>
+          ) : (
+            <i className={`bi bi-heart${isFavorite ? '-fill text-danger' : ''} fs-5`}></i>
+          )}
         </Button>
 
         {/* Title Overlay */}
@@ -247,7 +249,7 @@ function DetalleSkill() {
               {skill.rating && (
                 <div className="d-flex align-items-center gap-1">
                   <i className="bi bi-star-fill text-warning"></i>
-                  <span className="fw-bold">{skill.rating.toFixed(1)}</span>
+                  <span className="fw-bold">{parseFloat(skill.rating).toFixed(1)}</span>
                   <span className="opacity-75">({skill.total_resenas} reseñas)</span>
                 </div>
               )}
@@ -276,37 +278,37 @@ function DetalleSkill() {
                       
                       <hr className="my-4" />
                       
-                      <h5 className="fw-bold mb-3">Lo que aprenderás</h5>
+                      <h5 className="fw-bold mb-3">Detalles del skill</h5>
                       <Row>
                         <Col md={6}>
                           <ul className="list-unstyled">
                             <li className="mb-2">
-                              <i className="bi bi-check-circle-fill text-success me-2"></i>
-                              Fundamentos del diseño UI/UX
+                              <i className="bi bi-clock-fill text-primary me-2"></i>
+                              <strong>Duración:</strong> {skill.duracion_horas} horas
                             </li>
                             <li className="mb-2">
-                              <i className="bi bi-check-circle-fill text-success me-2"></i>
-                              Uso profesional de Figma
+                              <i className="bi bi-laptop-fill text-primary me-2"></i>
+                              <strong>Modalidad:</strong> {skill.modalidad}
                             </li>
                             <li className="mb-2">
-                              <i className="bi bi-check-circle-fill text-success me-2"></i>
-                              Creación de prototipos interactivos
+                              <i className="bi bi-bar-chart-fill text-primary me-2"></i>
+                              <strong>Nivel:</strong> {skill.nivel}
                             </li>
                           </ul>
                         </Col>
                         <Col md={6}>
                           <ul className="list-unstyled">
                             <li className="mb-2">
-                              <i className="bi bi-check-circle-fill text-success me-2"></i>
-                              Sistemas de diseño
+                              <i className="bi bi-tag-fill text-primary me-2"></i>
+                              <strong>Categoría:</strong> {skill.categoria}
                             </li>
                             <li className="mb-2">
-                              <i className="bi bi-check-circle-fill text-success me-2"></i>
-                              Mejores prácticas de UX
+                              <i className="bi bi-star-fill text-warning me-2"></i>
+                              <strong>Rating:</strong> {skill.rating ? parseFloat(skill.rating).toFixed(1) : 'Sin calificar'}
                             </li>
                             <li className="mb-2">
-                              <i className="bi bi-check-circle-fill text-success me-2"></i>
-                              Portfolio profesional
+                              <i className="bi bi-trophy-fill text-primary me-2"></i>
+                              <strong>Certificado incluido</strong>
                             </li>
                           </ul>
                         </Col>
@@ -323,30 +325,27 @@ function DetalleSkill() {
                           style={{
                             width: '80px',
                             height: '80px',
-                            backgroundImage: `url(${skill.user.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(skill.user.nombre + ' ' + skill.user.apellido)})`,
+                            backgroundImage: `url(${skill.user?.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent((skill.user?.nombre || '') + ' ' + (skill.user?.apellido || ''))})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center'
                           }}
                         />
                         <div>
                           <h5 className="fw-bold mb-1">
-                            {skill.user.nombre} {skill.user.apellido}
+                            {skill.user?.nombre} {skill.user?.apellido}
                           </h5>
                           <div className="d-flex align-items-center gap-2 text-muted">
                             <i className="bi bi-star-fill text-warning"></i>
-                            <span>{skill.user.rating?.toFixed(1)} rating</span>
+                            <span>{skill.user?.rating?.toFixed(1) || 'N/A'} rating</span>
                             <span>•</span>
-                            <span>{skill.user.total_intercambios} intercambios</span>
+                            <span>{skill.user?.total_intercambios || 0} intercambios</span>
                           </div>
                         </div>
                       </div>
                       <p className="text-muted">
-                        Profesional con más de 5 años de experiencia en diseño UI/UX para empresas 
-                        tecnológicas. Apasionado por crear experiencias de usuario excepcionales.
+                        Profesional con experiencia compartiendo conocimientos y habilidades 
+                        a través de SkillSwap. Apasionado por la enseñanza y el aprendizaje continuo.
                       </p>
-                      <Button variant="outline-primary" size="sm">
-                        Ver perfil completo
-                      </Button>
                     </div>
                   </Tab>
 
@@ -354,7 +353,7 @@ function DetalleSkill() {
                   <Tab eventKey="resenas" title={`Reseñas (${reviews.length})`}>
                     <div className="py-2">
                       {/* Botón para agregar reseña */}
-                      {user && !showReviewForm && (
+                      {isAuthenticated() && !showReviewForm && (
                         <Button 
                           variant="outline-primary" 
                           size="sm" 
@@ -432,7 +431,7 @@ function DetalleSkill() {
                                     style={{
                                       width: '48px',
                                       height: '48px',
-                                      backgroundImage: review.usuario.avatar_url ? `url(${review.usuario.avatar_url})` : 'none',
+                                      backgroundImage: review.usuario?.avatar_url ? `url(${review.usuario.avatar_url})` : 'none',
                                       backgroundSize: 'cover'
                                     }}
                                   />
@@ -440,7 +439,7 @@ function DetalleSkill() {
                                     <div className="d-flex justify-content-between align-items-start mb-2">
                                       <div>
                                         <h6 className="fw-bold mb-1">
-                                          {review.usuario.nombre} {review.usuario.apellido}
+                                          {review.usuario?.nombre} {review.usuario?.apellido}
                                         </h6>
                                         <div className="d-flex gap-1">
                                           {renderStars(review.puntuacion)}
@@ -472,7 +471,7 @@ function DetalleSkill() {
               <Card.Body className="p-4">
                 <div className="text-center mb-4">
                   <h2 className="h3 text-primary fw-bold mb-2">
-                    ${skill.precio?.toLocaleString('es-CL')} CLP
+                    ${Math.round(skill.precio).toLocaleString('es-CL')} CLP
                   </h2>
                   <p className="text-muted small mb-0">{skill.duracion_horas} horas de contenido</p>
                 </div>
@@ -524,10 +523,13 @@ function DetalleSkill() {
                     <i className="bi bi-trophy text-primary"></i>
                     <span className="small">Certificado de finalización</span>
                   </ListGroup.Item>
+                  <ListGroup.Item className="border-0 px-0 py-2 d-flex align-items-center gap-2">
+                    <i className="bi bi-infinity text-primary"></i>
+                    <span className="small">Acceso de por vida</span>
+                  </ListGroup.Item>
                 </ListGroup>
               </Card.Body>
             </Card>
-
           </Col>
         </Row>
 
