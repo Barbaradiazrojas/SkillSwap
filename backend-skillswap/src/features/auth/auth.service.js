@@ -13,7 +13,15 @@ class AuthService {
    * Registrar nuevo usuario
    */
   async register(userData) {
-    const { nombre, apellido, email, password } = userData
+    const { email, password } = userData
+    let { nombre, apellido } = userData
+    
+    // Si no viene apellido, dividir nombre completo
+    if (!apellido && nombre) {
+      const nombreCompleto = nombre.trim().split(' ')
+      nombre = nombreCompleto[0]
+      apellido = nombreCompleto.slice(1).join(' ') || nombre
+    }
     
     try {
       // Verificar si el email ya existe
@@ -39,7 +47,7 @@ class AuthService {
           apellido,
           email,
           hashedPassword,
-          `https://ui-avatars.com/api/?name=${nombre}+${apellido}&background=random`,
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}+${encodeURIComponent(apellido)}&background=random`,
           false
         ]
       )

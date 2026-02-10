@@ -15,7 +15,6 @@ router.post('/register',
   registerLimiter,
   [
     body('nombre').trim().notEmpty().withMessage('El nombre es requerido'),
-    body('apellido').trim().notEmpty().withMessage('El apellido es requerido'),
     body('email').isEmail().withMessage('Email inválido'),
     body('password')
       .isLength({ min: 6 })
