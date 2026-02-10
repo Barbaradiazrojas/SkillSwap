@@ -1,21 +1,43 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, Badge, Button } from 'react-bootstrap'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { favoritesAPI, cartAPI } from '../services/api'
+import { favoritesAPI, cartAPI, handleAPIError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
-function SkillCard({ skill, showActions = true }) {
+function SkillCard({ skill, showActions = true, onFavoriteChange }) {
   const navigate = useNavigate()
-  const { user } = useAuth()
-  const [isFavorite, setIsFavorite] = useState(skill.es_favorito || false)
+  const { user, isAuthenticated } = useAuth()
+  const [isFavorite, setIsFavorite] = useState(false)
   const [isInCart, setIsInCart] = useState(skill.en_carrito || false)
+  const [checkingFavorite, setCheckingFavorite] = useState(false)
+
+  // Verificar si está en favoritos al montar el componente
+  useEffect(() => {
+    if (isAuthenticated()) {
+      checkIfFavorite()
+    }
+  }, [skill.id_skill, user])
+
+  const checkIfFavorite = async () => {
+    try {
+      setCheckingFavorite(true)
+      const response = await favoritesAPI.checkFavorite(skill.id_skill)
+      if (response.data.success) {
+        setIsFavorite(response.data.data.isFavorite)
+      }
+    } catch (error) {
+      console.error('Error al verificar favorito:', error)
+    } finally {
+      setCheckingFavorite(false)
+    }
+  }
 
   const handleToggleFavorite = async (e) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!user) {
+    if (!isAuthenticated()) {
       toast.info('Debes iniciar sesión para agregar a favoritos')
       navigate('/login')
       return
@@ -23,17 +45,28 @@ function SkillCard({ skill, showActions = true }) {
 
     try {
       if (isFavorite) {
-        await favoritesAPI.remove(skill.id_skill)
+        await favoritesAPI.removeFavorite(skill.id_skill)
         setIsFavorite(false)
         toast.success('Eliminado de favoritos')
+        
+        // Notificar al componente padre si existe
+        if (onFavoriteChange) {
+          onFavoriteChange(skill.id_skill, false)
+        }
       } else {
-        await favoritesAPI.add(skill.id_skill)
+        await favoritesAPI.addFavorite(skill.id_skill)
         setIsFavorite(true)
         toast.success('Agregado a favoritos')
+        
+        // Notificar al componente padre si existe
+        if (onFavoriteChange) {
+          onFavoriteChange(skill.id_skill, true)
+        }
       }
     } catch (error) {
       console.error('Error al manejar favorito:', error)
-      toast.error('Error al actualizar favoritos')
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     }
   }
 
@@ -41,19 +74,20 @@ function SkillCard({ skill, showActions = true }) {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!user) {
+    if (!isAuthenticated()) {
       toast.info('Debes iniciar sesión para agregar al carrito')
       navigate('/login')
       return
     }
 
     try {
-      await cartAPI.addItem(skill.id_skill, 1)
+      await cartAPI.addItem({ id_skill: skill.id_skill, cantidad: 1 })
       setIsInCart(true)
       toast.success('Agregado al carrito')
     } catch (error) {
       console.error('Error al agregar al carrito:', error)
-      toast.error('Error al agregar al carrito')
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     }
   }
 
@@ -86,15 +120,20 @@ function SkillCard({ skill, showActions = true }) {
           }}
         >
           {/* Botón de Favorito */}
-          {showActions && (
+          {showActions && isAuthenticated() && (
             <Button
               variant="light"
               size="sm"
               className="position-absolute top-0 end-0 m-2 rounded-circle shadow-sm"
               style={{ width: '36px', height: '36px', padding: 0 }}
               onClick={handleToggleFavorite}
+              disabled={checkingFavorite}
             >
-              <i className={`bi bi-heart${isFavorite ? '-fill text-danger' : ''}`}></i>
+              {checkingFavorite ? (
+                <span className="spinner-border spinner-border-sm"></span>
+              ) : (
+                <i className={`bi bi-heart${isFavorite ? '-fill text-danger' : ''}`}></i>
+              )}
             </Button>
           )}
 
@@ -148,7 +187,7 @@ function SkillCard({ skill, showActions = true }) {
         {/* Instructor */}
         <p className="text-muted small mb-2" style={{ fontSize: '0.8rem' }}>
           <i className="bi bi-person me-1"></i>
-          {skill.user?.nombre} {skill.user?.apellido}
+          {skill.nombre_usuario || `${skill.user?.nombre} ${skill.user?.apellido}`}
         </p>
 
         {/* Duración y Modalidad */}

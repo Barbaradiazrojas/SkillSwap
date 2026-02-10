@@ -3,7 +3,7 @@ import { Container, Row, Col, Form, Button, Card, Badge, InputGroup } from 'reac
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import Swal from 'sweetalert2'
-import { favoritesAPI } from '../services/api'
+import { favoritesAPI, handleAPIError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
 function Favoritos() {
@@ -22,8 +22,8 @@ function Favoritos() {
   useEffect(() => {
     if (searchTerm) {
       const filtered = favorites.filter(fav =>
-        fav.skill?.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        fav.skill?.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+        fav.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        fav.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
       )
       setFilteredFavorites(filtered)
     } else {
@@ -34,12 +34,15 @@ function Favoritos() {
   const loadFavorites = async () => {
     try {
       setLoading(true)
-      const response = await favoritesAPI.getAll()
-      setFavorites(response.data.data || [])
+      const response = await favoritesAPI.getMyFavorites()
+      
+      if (response.data.success) {
+        setFavorites(response.data.data || [])
+      }
     } catch (error) {
       console.error('Error al cargar favoritos:', error)
-      // Datos de ejemplo si falla
-      setFavorites(getDemoFavorites())
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     } finally {
       setLoading(false)
     }
@@ -59,71 +62,15 @@ function Favoritos() {
 
     if (result.isConfirmed) {
       try {
-        await favoritesAPI.remove(skillId)
-        setFavorites(prev => prev.filter(fav => fav.skill.id_skill !== skillId))
+        await favoritesAPI.removeFavorite(skillId)
+        setFavorites(prev => prev.filter(fav => fav.id_skill !== skillId))
         toast.success('Eliminado de favoritos')
       } catch (error) {
         console.error('Error al eliminar favorito:', error)
-        toast.error('Error al eliminar de favoritos')
+        const errorInfo = handleAPIError(error)
+        toast.error(errorInfo.message)
       }
     }
-  }
-
-  const getDemoFavorites = () => {
-    return [
-      {
-        id_favorito: 1,
-        skill: {
-          id_skill: 1,
-          titulo: 'UI Design Basics',
-          descripcion: 'Aprende los fundamentos del diseño UI',
-          categoria: 'Diseño',
-          precio: 25000,
-          rating: 4.9,
-          imagen_url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5',
-          user: { nombre: 'Alex', apellido: 'Rivera' }
-        }
-      },
-      {
-        id_favorito: 2,
-        skill: {
-          id_skill: 2,
-          titulo: 'Photography 101',
-          descripcion: 'Fotografía profesional desde cero',
-          categoria: 'Fotografía',
-          precio: 20000,
-          rating: 5.0,
-          imagen_url: 'https://images.unsplash.com/photo-1452587925148-ce544e77e70d',
-          user: { nombre: 'Sara', apellido: 'Smith' }
-        }
-      },
-      {
-        id_favorito: 3,
-        skill: {
-          id_skill: 3,
-          titulo: 'React Mastery',
-          descripcion: 'Domina React desde cero',
-          categoria: 'Programación',
-          precio: 30000,
-          rating: 4.7,
-          imagen_url: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee',
-          user: { nombre: 'Code', apellido: 'Academy' }
-        }
-      },
-      {
-        id_favorito: 4,
-        skill: {
-          id_skill: 4,
-          titulo: 'Digital Marketing',
-          descripcion: 'Estrategias de marketing digital',
-          categoria: 'Marketing',
-          precio: 22000,
-          rating: 4.8,
-          imagen_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f',
-          user: { nombre: 'Elena', apellido: 'Marketing' }
-        }
-      }
-    ]
   }
 
   return (
@@ -146,15 +93,6 @@ function Favoritos() {
               <p className="text-muted small mb-0">
                 {filteredFavorites.length} {filteredFavorites.length === 1 ? 'skill guardado' : 'skills guardados'}
               </p>
-            </Col>
-            <Col xs="auto">
-              <Button 
-                variant="link" 
-                className="text-muted p-0"
-                onClick={() => {/* Opciones adicionales */}}
-              >
-                <i className="bi bi-three-dots fs-4"></i>
-              </Button>
             </Col>
           </Row>
         </Container>
@@ -220,12 +158,12 @@ function Favoritos() {
                   <div 
                     className="position-relative"
                     style={{ paddingTop: '125%', cursor: 'pointer' }}
-                    onClick={() => navigate(`/skill/${favorite.skill.id_skill}`)}
+                    onClick={() => navigate(`/skill/${favorite.id_skill}`)}
                   >
                     <div
                       className="position-absolute top-0 start-0 w-100 h-100"
                       style={{
-                        backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,0.6) 100%), url(${favorite.skill.imagen_url})`,
+                        backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,0.6) 100%), url(${favorite.imagen_url})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center'
                       }}
@@ -238,21 +176,21 @@ function Favoritos() {
                         style={{ width: '36px', height: '36px', padding: 0 }}
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleRemoveFavorite(favorite.skill.id_skill, favorite.skill.titulo)
+                          handleRemoveFavorite(favorite.id_skill, favorite.titulo)
                         }}
                       >
                         <i className="bi bi-heart-fill text-danger"></i>
                       </Button>
 
                       {/* Rating Badge */}
-                      {favorite.skill.rating && (
+                      {favorite.rating && (
                         <Badge 
                           bg="dark" 
                           className="position-absolute bottom-0 start-0 m-2 d-flex align-items-center gap-1"
                           style={{ fontSize: '0.7rem', opacity: 0.9 }}
                         >
                           <i className="bi bi-star-fill text-warning"></i>
-                          {favorite.skill.rating.toFixed(1)}
+                          {parseFloat(favorite.rating).toFixed(1)}
                         </Badge>
                       )}
                     </div>
@@ -261,27 +199,27 @@ function Favoritos() {
                   {/* Contenido */}
                   <Card.Body className="p-3">
                     <Link 
-                      to={`/skill/${favorite.skill.id_skill}`}
+                      to={`/skill/${favorite.id_skill}`}
                       className="text-decoration-none text-dark"
                     >
                       <Card.Title 
                         className="h6 mb-2 text-truncate" 
                         style={{ fontSize: '0.9rem' }}
                       >
-                        {favorite.skill.titulo}
+                        {favorite.titulo}
                       </Card.Title>
                     </Link>
                     
                     <p className="text-muted small mb-2" style={{ fontSize: '0.75rem' }}>
-                      por {favorite.skill.user?.nombre} {favorite.skill.user?.apellido}
+                      por {favorite.nombre_usuario}
                     </p>
 
                     <div className="d-flex justify-content-between align-items-center">
                       <span className="text-primary fw-bold" style={{ fontSize: '0.9rem' }}>
-                        ${favorite.skill.precio?.toLocaleString('es-CL')}
+                        ${Math.round(favorite.precio).toLocaleString('es-CL')}
                       </span>
                       <Badge bg="light" text="dark" className="text-uppercase" style={{ fontSize: '0.65rem' }}>
-                        {favorite.skill.categoria}
+                        {favorite.categoria}
                       </Badge>
                     </div>
                   </Card.Body>
@@ -291,7 +229,7 @@ function Favoritos() {
           </Row>
         )}
 
-        {/* Botón Explorar más (si hay favoritos) */}
+        {/* Botón Explorar más */}
         {!loading && filteredFavorites.length > 0 && (
           <div className="text-center mt-5">
             <p className="text-muted mb-3">¿Buscas más skills?</p>
