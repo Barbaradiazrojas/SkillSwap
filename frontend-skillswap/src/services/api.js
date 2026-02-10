@@ -84,4 +84,50 @@ export const reviewsAPI = {
   delete: (reviewId) => api.delete(`/api/reviews/${reviewId}`)
 }
 
+export const handleAPIError = (error) => {
+  if (!error.response) {
+    // Error de red
+    return {
+      message: 'No se pudo conectar con el servidor. Verifica tu conexión a internet.',
+      type: 'network'
+    }
+  }
+
+  const status = error.response.status
+  const serverMessage = error.response.data?.message
+
+  switch (status) {
+    case 400:
+      return {
+        message: serverMessage || 'Los datos enviados son inválidos',
+        type: 'validation'
+      }
+    case 401:
+      return {
+        message: 'Credenciales incorrectas o sesión expirada',
+        type: 'auth'
+      }
+    case 404:
+      return {
+        message: serverMessage || 'El recurso solicitado no existe',
+        type: 'notFound'
+      }
+    case 409:
+      return {
+        message: serverMessage || 'Ya existe un registro con estos datos',
+        type: 'conflict'
+      }
+    case 500:
+      return {
+        message: 'Error del servidor. Por favor intenta más tarde.',
+        type: 'server'
+      }
+    default:
+      return {
+        message: serverMessage || 'Ocurrió un error inesperado',
+        type: 'unknown'
+      }
+  }
+}
+
 export default api

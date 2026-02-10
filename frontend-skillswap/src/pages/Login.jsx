@@ -1,50 +1,60 @@
 import { useState } from 'react'
 import { Container, Row, Col, Form, Button, Card, Alert } from 'react-bootstrap'
 import { Link, useNavigate } from 'react-router-dom'
-import { authAPI } from '../services/api'
+import { authAPI, handleAPIError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { toast } from 'react-toastify'
+import useForm from '../hooks/useForm'
+import { required, isEmail, minLength } from '../utils/validations'
 
 function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
-  
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+  const [serverError, setServerError] = useState('')
+
+  // Configurar validaciones para el formulario de login
+  const loginValidations = () => ({
+    email: [
+      required('El email'),
+      isEmail
+    ],
+    password: [
+      required('La contraseña'),
+      minLength(6, 'La contraseña')
+    ]
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-  }
+  // Usar el hook personalizado useForm
+  const {
+    values,
+    errors,
+    touched,
+    isSubmitting,
+    handleChange,
+    handleBlur,
+    handleSubmit
+  } = useForm(
+    { email: '', password: '' },  // Valores iniciales
+    loginValidations               // Reglas de validación
+  )
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+  // Función que se ejecuta cuando el formulario es válido
+  const onSubmit = async (formData) => {
+    setServerError('')
 
     try {
       const response = await authAPI.login(formData)
       
       if (response.data.success) {
-        // Guardar token y usuario en el contexto
         login(response.data.data.user, response.data.data.token)
-        
         toast.success('¡Bienvenido de vuelta!')
         navigate('/')
       }
     } catch (error) {
       console.error('Error en login:', error)
-      const errorMessage = error.response?.data?.message || 'Error al iniciar sesión'
-      setError(errorMessage)
-      toast.error(errorMessage)
-    } finally {
-      setLoading(false)
+      const errorInfo = handleAPIError(error)
+      setServerError(errorInfo.message)
+      toast.error(errorInfo.message)
     }
   }
 
@@ -60,23 +70,27 @@ function Login() {
                   <p className="text-muted">Accede a tu cuenta de SkillSwap</p>
                 </div>
 
-                {error && (
-                  <Alert variant="danger" dismissible onClose={() => setError('')}>
-                    {error}
+                {serverError && (
+                  <Alert variant="danger" dismissible onClose={() => setServerError('')}>
+                    {serverError}
                   </Alert>
                 )}
 
-                <Form onSubmit={handleSubmit}>
+                <Form onSubmit={handleSubmit(onSubmit)}>
                   <Form.Group className="mb-3">
                     <Form.Label>Email</Form.Label>
                     <Form.Control
                       type="email"
                       name="email"
                       placeholder="tu@email.com"
-                      value={formData.email}
+                      value={values.email}
                       onChange={handleChange}
-                      required
+                      onBlur={handleBlur}
+                      isInvalid={touched.email && !!errors.email}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {errors.email}
+                    </Form.Control.Feedback>
                   </Form.Group>
 
                   <Form.Group className="mb-4">
@@ -85,10 +99,14 @@ function Login() {
                       type="password"
                       name="password"
                       placeholder="••••••••"
-                      value={formData.password}
+                      value={values.password}
                       onChange={handleChange}
-                      required
+                      onBlur={handleBlur}
+                      isInvalid={touched.password && !!errors.password}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      {errors.password}
+                    </Form.Control.Feedback>
                   </Form.Group>
 
                   <Button
@@ -96,9 +114,9 @@ function Login() {
                     type="submit"
                     className="w-100 mb-3"
                     size="lg"
-                    disabled={loading}
+                    disabled={isSubmitting}
                   >
-                    {loading ? (
+                    {isSubmitting ? (
                       <>
                         <span className="spinner-border spinner-border-sm me-2" />
                         Iniciando sesión...
