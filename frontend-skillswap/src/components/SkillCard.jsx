@@ -70,26 +70,27 @@ function SkillCard({ skill, showActions = true, onFavoriteChange }) {
     }
   }
 
-  const handleAddToCart = async (e) => {
-    e.preventDefault()
-    e.stopPropagation()
+const handleAddToCart = async (e) => {
+  e.preventDefault()
+  e.stopPropagation()
 
-    if (!isAuthenticated()) {
-      toast.info('Debes iniciar sesión para agregar al carrito')
-      navigate('/login')
-      return
-    }
-
-    try {
-      await cartAPI.addItem({ id_skill: skill.id_skill, cantidad: 1 })
-      setIsInCart(true)
-      toast.success('Agregado al carrito')
-    } catch (error) {
-      console.error('Error al agregar al carrito:', error)
-      const errorInfo = handleAPIError(error)
-      toast.error(errorInfo.message)
-    }
+  if (!isAuthenticated()) {
+    toast.info('Debes iniciar sesión para agregar al carrito')
+    navigate('/login')
+    return
   }
+
+  try {
+    // Enviar con el nombre correcto que espera el backend
+    await cartAPI.addItem({ skillId: skill.id_skill, cantidad: 1 })
+    setIsInCart(true)
+    toast.success('Agregado al carrito')
+  } catch (error) {
+    console.error('Error al agregar al carrito:', error)
+    const errorInfo = handleAPIError(error)
+    toast.error(errorInfo.message)
+  }
+}
 
   return (
     <Card 

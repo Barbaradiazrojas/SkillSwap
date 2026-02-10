@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Container, Row, Col, Form, Button, Card, Badge, InputGroup, Dropdown } from 'react-bootstrap'
-import { skillsAPI } from '../services/api'
+import { skillsAPI, handleAPIError } from '../services/api'
 import SkillCard from '../components/SkillCard'
 import { CATEGORIES, LEVELS, MODALITIES } from '../utils/constants'
+import { toast } from 'react-toastify'
 
 function Explorar() {
   const [skills, setSkills] = useState([])
@@ -29,11 +30,15 @@ function Explorar() {
     try {
       setLoading(true)
       const response = await skillsAPI.getAll()
-      setSkills(response.data.data || [])
+      
+      if (response.data.success) {
+        setSkills(response.data.data || [])
+      }
     } catch (error) {
       console.error('Error al cargar skills:', error)
-      // Usar datos de ejemplo si falla
-      setSkills(getDemoSkills())
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
+      setSkills([])
     } finally {
       setLoading(false)
     }
@@ -45,8 +50,8 @@ function Explorar() {
     // Filtro por búsqueda
     if (searchTerm) {
       filtered = filtered.filter(skill =>
-        skill.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        skill.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+        skill.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        skill.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
@@ -100,63 +105,6 @@ function Explorar() {
     setSortBy('recientes')
   }
 
-  const getDemoSkills = () => {
-    return [
-      {
-        id_skill: 1,
-        titulo: 'Clases de Guitarra',
-        descripcion: 'Aprende a tocar guitarra desde cero',
-        categoria: 'Música',
-        nivel: 'Principiante',
-        modalidad: 'Online',
-        precio: 15000,
-        rating: 4.8,
-        total_resenas: 24,
-        imagen_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4',
-        creado_en: '2024-01-15'
-      },
-      {
-        id_skill: 2,
-        titulo: 'Diseño UI/UX',
-        descripcion: 'Diseño de interfaces modernas',
-        categoria: 'Diseño',
-        nivel: 'Intermedio',
-        modalidad: 'Online',
-        precio: 25000,
-        rating: 4.9,
-        total_resenas: 42,
-        imagen_url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5',
-        creado_en: '2024-01-10'
-      },
-      {
-        id_skill: 3,
-        titulo: 'Cocina Chilena',
-        descripcion: 'Recetas tradicionales chilenas',
-        categoria: 'Cocina',
-        nivel: 'Principiante',
-        modalidad: 'Presencial',
-        precio: 12000,
-        rating: 4.7,
-        total_resenas: 18,
-        imagen_url: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d',
-        creado_en: '2024-01-20'
-      },
-      {
-        id_skill: 4,
-        titulo: 'Fotografía Digital',
-        descripcion: 'Técnicas de fotografía profesional',
-        categoria: 'Fotografía',
-        nivel: 'Intermedio',
-        modalidad: 'Híbrido',
-        precio: 20000,
-        rating: 4.6,
-        total_resenas: 31,
-        imagen_url: 'https://images.unsplash.com/photo-1452587925148-ce544e77e70d',
-        creado_en: '2024-01-12'
-      }
-    ]
-  }
-
   return (
     <div className="bg-light min-vh-100">
       {/* Header */}
@@ -200,7 +148,7 @@ function Explorar() {
 
       <Container className="py-4">
         <Row>
-          {/* Sidebar - Filtros (Desktop: fixed, Mobile: collapsible) */}
+          {/* Sidebar - Filtros */}
           <Col lg={3} className="mb-4">
             <Card className="border-0 shadow-sm sticky-top" style={{ top: '80px' }}>
               <Card.Body>
@@ -330,7 +278,10 @@ function Explorar() {
                   <i className="bi bi-inbox text-muted" style={{ fontSize: '4rem' }}></i>
                   <h4 className="mt-3 mb-2">No se encontraron resultados</h4>
                   <p className="text-muted mb-3">
-                    Intenta ajustar los filtros o busca algo diferente
+                    {skills.length === 0 
+                      ? 'No hay skills disponibles en este momento'
+                      : 'Intenta ajustar los filtros o busca algo diferente'
+                    }
                   </p>
                   <Button variant="primary" onClick={clearFilters}>
                     Limpiar filtros
@@ -347,7 +298,7 @@ function Explorar() {
                   ))}
                 </Row>
 
-                {/* Pagination / Load More (opcional) */}
+                {/* Pagination / Load More */}
                 {filteredSkills.length >= 12 && (
                   <div className="text-center mt-5">
                     <Button variant="outline-primary" size="lg">

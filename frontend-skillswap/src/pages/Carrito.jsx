@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Container, Row, Col, Card, Button, Badge, ListGroup } from 'react-bootstrap'
+import { Container, Row, Col, Card, Button, Badge } from 'react-bootstrap'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import Swal from 'sweetalert2'
-import { cartAPI } from '../services/api'
+import { cartAPI, handleAPIError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
 function Carrito() {
@@ -22,12 +22,15 @@ function Carrito() {
   const loadCart = async () => {
     try {
       setLoading(true)
-      const response = await cartAPI.getCart()
-      setCartItems(response.data.data?.items || [])
+      const response = await cartAPI.getMyCart()
+      
+      if (response.data.success) {
+        setCartItems(response.data.data?.items || [])
+      }
     } catch (error) {
       console.error('Error al cargar carrito:', error)
-      // Datos de ejemplo si falla
-      setCartItems(getDemoCartItems())
+      const errorInfo = handleAPIError(error)
+      toast.error(errorInfo.message)
     } finally {
       setLoading(false)
     }
@@ -52,7 +55,8 @@ function Carrito() {
         toast.success('Eliminado del carrito')
       } catch (error) {
         console.error('Error al eliminar item:', error)
-        toast.error('Error al eliminar del carrito')
+        const errorInfo = handleAPIError(error)
+        toast.error(errorInfo.message)
       }
     }
   }
@@ -76,13 +80,16 @@ function Carrito() {
         toast.success('Carrito vaciado')
       } catch (error) {
         console.error('Error al vaciar carrito:', error)
-        toast.error('Error al vaciar el carrito')
+        const errorInfo = handleAPIError(error)
+        toast.error(errorInfo.message)
       }
     }
   }
 
   const calculateSubtotal = () => {
-    return cartItems.reduce((total, item) => total + (item.precio_unitario * item.cantidad), 0)
+    return cartItems.reduce((total, item) => 
+      total + (parseFloat(item.precio_unitario) * item.cantidad), 0
+    )
   }
 
   const calculateCommission = () => {
@@ -102,50 +109,6 @@ function Carrito() {
     // Aquí integrarías con tu sistema de pagos
     toast.info('Funcionalidad de pago en desarrollo')
     // navigate('/checkout')
-  }
-
-  const getDemoCartItems = () => {
-    return [
-      {
-        id_item: 1,
-        id_skill: 1,
-        cantidad: 1,
-        precio_unitario: 25000,
-        skill: {
-          titulo: 'Clases de React Avanzado',
-          imagen_url: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee',
-          categoria: 'Programación',
-          duracion_horas: 3,
-          user: { nombre: 'Javier', apellido: 'Pérez' }
-        }
-      },
-      {
-        id_item: 2,
-        id_skill: 2,
-        cantidad: 1,
-        precio_unitario: 45000,
-        skill: {
-          titulo: 'Diseño UI/UX con Figma',
-          imagen_url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5',
-          categoria: 'Diseño',
-          duracion_horas: 5,
-          user: { nombre: 'Sofia', apellido: 'Ruiz' }
-        }
-      },
-      {
-        id_item: 3,
-        id_skill: 3,
-        cantidad: 1,
-        precio_unitario: 15000,
-        skill: {
-          titulo: 'Growth Hacking 101',
-          imagen_url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f',
-          categoria: 'Marketing',
-          duracion_horas: 2,
-          user: { nombre: 'Carlos', apellido: 'Vega' }
-        }
-      }
-    ]
   }
 
   return (
@@ -223,7 +186,7 @@ function Carrito() {
                           className="rounded"
                           style={{
                             paddingTop: '100%',
-                            backgroundImage: `url(${item.skill?.imagen_url || 'https://via.placeholder.com/150'})`,
+                            backgroundImage: `url(${item.imagen_url || 'https://via.placeholder.com/150'})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center'
                           }}
@@ -233,19 +196,19 @@ function Carrito() {
                       {/* Información */}
                       <Col xs={7} sm={8}>
                         <h6 className="fw-bold mb-1" style={{ fontSize: '0.95rem' }}>
-                          {item.skill?.titulo}
+                          {item.titulo}
                         </h6>
                         <p className="text-primary fw-bold mb-1" style={{ fontSize: '0.9rem' }}>
-                          ${item.precio_unitario?.toLocaleString('es-CL')} CLP
+                          ${Math.round(item.precio_unitario).toLocaleString('es-CL')} CLP
                         </p>
                         <p className="text-muted small mb-0" style={{ fontSize: '0.75rem' }}>
                           <i className="bi bi-person me-1"></i>
-                          {item.skill?.user?.nombre} {item.skill?.user?.apellido}
-                          {item.skill?.duracion_horas && (
+                          {item.nombre_usuario}
+                          {item.duracion_horas && (
                             <>
                               {' • '}
                               <i className="bi bi-clock me-1"></i>
-                              {item.skill.duracion_horas} hrs
+                              {item.duracion_horas} hrs
                             </>
                           )}
                         </p>
@@ -256,7 +219,7 @@ function Carrito() {
                         <Button
                           variant="link"
                           className="text-muted p-0"
-                          onClick={() => handleRemoveItem(item.id_item, item.skill?.titulo)}
+                          onClick={() => handleRemoveItem(item.id_item, item.titulo)}
                           style={{ fontSize: '1.3rem' }}
                         >
                           <i className="bi bi-trash"></i>
@@ -318,19 +281,19 @@ function Carrito() {
             <div className="mb-3">
               <div className="d-flex justify-content-between mb-2">
                 <span className="text-muted small">Subtotal</span>
-                <span className="fw-semibold">${calculateSubtotal().toLocaleString('es-CL')} CLP</span>
+                <span className="fw-semibold">${Math.round(calculateSubtotal()).toLocaleString('es-CL')} CLP</span>
               </div>
               <div className="d-flex justify-content-between mb-2">
                 <span className="text-muted small">
                   Comisión de servicio ({(COMMISSION_RATE * 100).toFixed(0)}%)
                 </span>
-                <span className="fw-semibold">${calculateCommission().toLocaleString('es-CL')} CLP</span>
+                <span className="fw-semibold">${Math.round(calculateCommission()).toLocaleString('es-CL')} CLP</span>
               </div>
               <hr className="my-2" />
               <div className="d-flex justify-content-between align-items-center">
                 <span className="h5 fw-bold mb-0">Total</span>
                 <span className="h4 text-primary fw-bold mb-0">
-                  ${calculateTotal().toLocaleString('es-CL')} CLP
+                  ${Math.round(calculateTotal()).toLocaleString('es-CL')} CLP
                 </span>
               </div>
             </div>
